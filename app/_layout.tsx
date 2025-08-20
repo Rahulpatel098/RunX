@@ -6,22 +6,41 @@ import { PaperProvider } from "react-native-paper";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 function RouteGuard({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
   const { user, isLoadingUser } = useAuth();
+  const router = useRouter();
   const segments = useSegments();
 
   useEffect(() => {
-    const inAuthGroup = segments[0] === "auth" ;
+    const inAuthGroup = segments[0] === "auth";
 
-    if (!user && !inAuthGroup && !isLoadingUser) {
-      router.replace("/auth" );
-    } else if (user && inAuthGroup && !isLoadingUser) {
-      router.replace("/");
+    if (user && inAuthGroup && !isLoadingUser) {
+      router.replace("/(tabs)");
+    } else if (!user && !inAuthGroup && !isLoadingUser) {
+      router.replace('/auth/login');
     }
-  }, [user, segments,isLoadingUser]);
+  }, [user, segments, isLoadingUser]);
 
   return <>{children}</>;
 }
+
+// presvios rout
+// function RouteGuard({ children }: { children: React.ReactNode }) {
+//   const router = useRouter();
+//   const { user, isLoadingUser } = useAuth();
+//   const segments = useSegments();
+
+//   useEffect(() => {
+//     const inAuthGroup = segments[0] === "auth" ;
+
+//     if (!user && !inAuthGroup && !isLoadingUser) {
+//       router.replace("/auth" );
+//     } else if (user && inAuthGroup && !isLoadingUser) {
+//       router.replace("/");
+//     }
+//   }, [user, segments,isLoadingUser]);
+
+//   return <>{children}</>;
+// }
 
 export default function RootLayout() {
   return (

@@ -1,4 +1,5 @@
-// LeaderboardScreen.tsx
+import { DATABASE_ID, databases, MESAGESDATA_ID, client } from "@/appwrite"; 
+import { useAuth } from "@/context/authContext";
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -11,153 +12,167 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-
-// --- Mock Leaderboard Data ---
-const mockLeaderboard = [
-  { id: "1", username: "RunKing", distance: 120, territories: 8, avatar: "https://i.pravatar.cc/100?img=1" },
-  { id: "2", username: "SpeedySam", distance: 95, territories: 5, avatar: "https://i.pravatar.cc/100?img=2" },
-  { id: "3", username: "TrailQueen", distance: 88, territories: 6, avatar: "https://i.pravatar.cc/100?img=3" },
-  { id: "4", username: "JoggerJoe", distance: 70, territories: 3, avatar: "https://i.pravatar.cc/100?img=4" },
-];
-
-// --- Mock Community Chat ---
-const mockMessages = [
-  { id: "1", user: "RunKing", text: "Just conquered Connaught Place! 👑", avatar: "https://i.pravatar.cc/100?img=1" },
-  { id: "2", user: "TrailQueen", text: "🔥 Nice! I’m coming for Lodhi Gardens!", avatar: "https://i.pravatar.cc/100?img=3" },
-  { id: "3", user: "SpeedySam", text: "Anyone up for a morning run tomorrow?", avatar: "https://i.pravatar.cc/100?img=2" },
-];
+import { ID, Query } from "react-native-appwrite";
 
 export default function LeaderboardScreen() {
   const [activeTab, setActiveTab] = useState<"leaderboard" | "community">("leaderboard");
-  const [messages, setMessages] = useState(mockMessages);
+  const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
+  const { user } = useAuth();
 
-  // --- Simulate leaderboard fetch ---
-  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  // --- Fetch old messages ---
   useEffect(() => {
-    setLeaderboard(mockLeaderboard);
+    const fetchMessages = async () => {
+      try {
+        const res = await databases.listDocuments(DATABASE_ID, MESAGESDATA_ID, [
+          Query.orderDesc("createdAt"),
+          Query.limit(50),
+        ]);
+
+        const formatted = res.documents.map((doc: any) => ({
+          id: doc.$id,
+          user: doc.username,
+          text: doc.message,
+          avatar: doc.avatar || "https://i.pravatar.cc/100",
+          createdAt: doc.createdAt,
+        }));
+
+        setMessages(formatted);
+      } catch (err) {
+        console.error("Error fetching messages:", err);
+      }
+    };
+
+    fetchMessages();
   }, []);
 
-  // --- Send message handler ---
-  const sendMessage = () => {
-    if (!newMessage.trim()) return;
-    const msg = {
-      id: Date.now().toString(),
-      user: "You",
-      text: newMessage,
-      avatar: "https://i.pravatar.cc/100?img=5", // your profile pic later
+  // --- Realtime subscription ---
+  useEffect(() => {
+    const unsubscribe = client.subscribe(
+      `databases.${DATABASE_ID}.collections.${MESAGESDATA_ID}.documents`,
+      (response) => {
+        if (response.events.includes("databases.*.collections.*.documents.*.create")) {
+          const doc: any = response.payload;
+          const newMsg = {
+            id: doc.$id,
+            user: doc.username,
+            text: doc.message,
+            avatar: doc.avatar || "https://i.pravatar.cc/100",
+            createdAt: doc.createdAt,
+          };
+
+          setMessages((prev) => [newMsg, ...prev]); // push new message on top
+        }
+      }
+    );
+
+    return () => {
+      unsubscribe(); // clean up on unmount
     };
-    setMessages((prev) => [msg, ...prev]);
-    setNewMessage("");
+  }, []);
+
+  // --- Send a message ---
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !user) return;
+
+    try {
+      await databases.createDocument(
+        DATABASE_ID,
+        MESAGESDATA_ID,
+        ID.unique(),
+        {
+          userId: user.$id,
+          username: user.name || "Anonymous",
+          message: newMessage,
+          // avatar: user.profilePic || `https://i.pravatar.cc/100?u=${user.$id}`,
+          createdAt: new Date().toISOString(),
+        }
+      );
+
+      setNewMessage(""); // clear input
+      // No need to manually update `messages` here → realtime will handle it
+    } catch (err) {
+      console.error("Error sending message:", err);
+    }
   };
 
   return (
-     <KeyboardAvoidingView style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-                keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
-        >
     <View style={styles.container}>
-      {/* Tabs Switcher */}
+      {/* Tabs */}
       <View style={styles.tabBar}>
-        <TouchableOpacity onPress={() => setActiveTab("leaderboard")} style={[styles.tab, activeTab === "leaderboard" && styles.activeTab]}>
-          <Text style={[styles.tabText, activeTab === "leaderboard" && styles.activeTabText]}>🏆 Leaderboard</Text>
+        <TouchableOpacity
+          onPress={() => setActiveTab("leaderboard")}
+          style={[styles.tab, activeTab === "leaderboard" && styles.activeTab]}
+        >
+          <Text style={[styles.tabText, activeTab === "leaderboard" && styles.activeTabText]}>
+            🏆 Leaderboard
+          </Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setActiveTab("community")} style={[styles.tab, activeTab === "community" && styles.activeTab]}>
-          <Text style={[styles.tabText, activeTab === "community" && styles.activeTabText]}>💬 Community</Text>
+        <TouchableOpacity
+          onPress={() => setActiveTab("community")}
+          style={[styles.tab, activeTab === "community" && styles.activeTab]}
+        >
+          <Text style={[styles.tabText, activeTab === "community" && styles.activeTabText]}>
+            💬 Community
+          </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Leaderboard View */}
-      {activeTab === "leaderboard" && (
-        <FlatList
-          data={leaderboard}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item, index }) => (
-            <View style={styles.leaderItem}>
-              <Text style={styles.rank}>{index + 1}</Text>
-              <Image source={{ uri: item.avatar }} style={styles.avatar} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.username}>{item.username}</Text>
-                <Text style={styles.subtext}>
-                  {item.distance} km • {item.territories} territories
-                </Text>
-              </View>
-              <Text style={styles.crown}>{index === 0 ? "👑" : ""}</Text>
-            </View>
-          )}
-        />
-      )}
-
-      {/* Community View */}
+      {/* Community Chat */}
       {activeTab === "community" && (
-       
-        <View >
-          <FlatList
-            data={messages}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View style={styles.messageItem}>
-                <Image source={{ uri: item.avatar }} style={styles.chatAvatar} />
-                <View style={styles.messageBubble}>
-                  <Text style={styles.messageUser}>{item.user}</Text>
-                  <Text style={styles.messageText}>{item.text}</Text>
-                </View>
-              </View>
-            )}
-            inverted // newest at bottom
-          />
-
-          {/* Input Box */}
-          <View style={styles.inputBox}>
-            <TextInput
-              style={styles.input}
-              placeholder="Type a message..."
-              value={newMessage}
-              onChangeText={setNewMessage}
-            />
-            <TouchableOpacity onPress={sendMessage} style={styles.sendButton}>
-              <Text style={styles.sendText}>➤</Text>
-            </TouchableOpacity>
+  <KeyboardAvoidingView
+    style={{ flex: 1 }}
+    behavior={Platform.OS === "ios" ? "padding" : "height"}
+    keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
+  >
+    <View style={{ flex: 1 }}>
+      <FlatList
+        data={messages}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <View style={styles.messageItem}>
+            <Image source={{ uri: item.avatar }} style={styles.chatAvatar} />
+            <View style={styles.messageBubble}>
+              <Text style={styles.messageUser}>{item.user}</Text>
+              <Text style={styles.messageText}>{item.text}</Text>
+            </View>
           </View>
-        </View>
-      )}
+        )}
+        inverted
+      />
+
+      {/* Input */}
+      <View style={styles.inputBox}>
+        <TextInput
+          style={styles.input}
+          placeholder="Type a message..."
+          value={newMessage}
+          onChangeText={setNewMessage}
+        />
+        <TouchableOpacity onPress={sendMessage} style={styles.sendButton}>
+          <Text style={styles.sendText}>➤</Text>
+        </TouchableOpacity>
+      </View>
     </View>
-      </KeyboardAvoidingView>
+  </KeyboardAvoidingView>
+)}
+
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
-
-  // Tabs
   tabBar: { flexDirection: "row", backgroundColor: "#f5f5f5" },
   tab: { flex: 1, padding: 14, alignItems: "center" },
   activeTab: { borderBottomWidth: 3, borderBottomColor: "#007bff" },
   tabText: { fontSize: 16, color: "#666" },
   activeTabText: { color: "#007bff", fontWeight: "bold" },
-
-  // Leaderboard
-  leaderItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-  },
-  rank: { fontSize: 18, fontWeight: "bold", width: 30 },
-  avatar: { width: 40, height: 40, borderRadius: 20, marginRight: 10 },
-  username: { fontSize: 16, fontWeight: "600" },
-  subtext: { fontSize: 13, color: "gray" },
-  crown: { fontSize: 18 },
-
-  // Community
   messageItem: { flexDirection: "row", padding: 10, alignItems: "flex-start" },
   chatAvatar: { width: 40, height: 40, borderRadius: 20, marginRight: 10 },
   messageBubble: { backgroundColor: "#f0f0f0", padding: 10, borderRadius: 10, flex: 1 },
   messageUser: { fontWeight: "bold", marginBottom: 2 },
   messageText: { fontSize: 14 },
-
-  // Input
   inputBox: {
     flexDirection: "row",
     padding: 10,

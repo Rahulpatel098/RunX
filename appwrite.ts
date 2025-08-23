@@ -7,9 +7,10 @@ export const client= new Client()
 
 
 export const account= new Account(client);
-// export const databases= new Databases(client);
+export const databases= new Databases(client);
 
-// export const DATABASE_ID= process.env.EXPO_PUBLIC_DB_ID!;
+export const DATABASE_ID= process.env.EXPO_PUBLIC_DB_ID!;
+export const MESAGESDATA_ID=process.env.EXPO_PUBLIC_MESSAGES_ID!;
 // export const HABITS_COLLECTION_ID= process.env.EXPO_PUBLIC_HABITS_COLLECTION_ID;
 // export const COMPLETIONS_COLLECTION_ID= process.env.EXPO_PUBLIC_COMPLETIONS_COLLECTION_ID;
 // export interface RealtimeResponse{

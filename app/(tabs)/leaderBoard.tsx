@@ -13,13 +13,14 @@ import {
   Platform,
 } from "react-native";
 import { ID, Query } from "react-native-appwrite";
+import { ActivityIndicator } from "react-native-paper";
 
 export default function LeaderboardScreen() {
   const [activeTab, setActiveTab] = useState<"leaderboard" | "community">("leaderboard");
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const { user } = useAuth();
-
+  const [loading, setLoading] =useState<boolean>(false);
   // --- Fetch old messages ---
   useEffect(() => {
     const fetchMessages = async () => {
@@ -74,9 +75,9 @@ export default function LeaderboardScreen() {
   // --- Send a message ---
   const sendMessage = async () => {
     if (!newMessage.trim() || !user) return;
-
+    setLoading(true);
     try {
-      await databases.createDocument(
+    const response = await databases.createDocument(
         DATABASE_ID,
         MESAGESDATA_ID,
         ID.unique(),
@@ -90,9 +91,12 @@ export default function LeaderboardScreen() {
       );
 
       setNewMessage(""); // clear input
+      console.log(response);
       // No need to manually update `messages` here → realtime will handle it
     } catch (err) {
       console.error("Error sending message:", err);
+    }finally{
+      setLoading(false);
     }
   };
 
@@ -150,7 +154,7 @@ export default function LeaderboardScreen() {
           onChangeText={setNewMessage}
         />
         <TouchableOpacity onPress={sendMessage} style={styles.sendButton}>
-          <Text style={styles.sendText}>➤</Text>
+          {!loading ? <Text style={styles.sendText}>➤</Text> : <ActivityIndicator size={10}/> }
         </TouchableOpacity>
       </View>
     </View>
